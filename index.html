@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>黑神话：导游执证修行</title>
+    <style>
+        :root {
+            --gold-low: #8b6d31;
+            --gold-bright: #d4af37;
+            --dark-bg: #0a0a0a;
+            --scroll-bg: #e3d5b8;
+            --ink-black: #1a1a1a;
+        }
+
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            background-color: var(--dark-bg);
+            color: #ccc;
+            font-family: "STKaiti", "KaiTi", serif;
+            overflow: hidden;
+            display: flex; justify-content: center; align-items: center;
+        }
+
+        #game-container {
+            position: relative;
+            width: 1280px; height: 720px;
+            background: #000;
+            border: 4px solid var(--gold-low);
+            box-shadow: 0 0 50px rgba(0,0,0,1);
+            overflow: hidden;
+        }
+
+        #stage-bg {
+            position: absolute; width: 100%; height: 100%;
+            background-size: cover; background-position: center;
+            transition: all 1s ease; z-index: 1;
+            filter: brightness(0.7);
+        }
+
+        #wukong-sprite {
+            position: absolute; left: 0px; bottom: 0;
+            height: 90%; z-index: 10;
+            pointer-events: none;
+            filter: drop-shadow(0 0 20px #000);
+            display: none;
+        }
+
+        #lamp-container {
+            position: absolute; top: 20px; left: 50%;
+            transform: translateX(-50%); z-index: 100;
+            text-align: center;
+        }
+
+        #hp-val { color: var(--gold-bright); font-size: 24px; font-weight: bold; }
+
+        #dialog-panel {
+            position: absolute; bottom: 40px; right: 50px;
+            width: 700px; min-height: 200px;
+            background-color: var(--scroll-bg);
+            border: 8px solid #8b6d31;
+            box-shadow: 10px 10px 30px rgba(0,0,0,0.8);
+            z-index: 50; padding: 30px;
+            color: var(--ink-black); display: none;
+        }
+
+        .option-btn {
+            display: block; width: 100%; padding: 12px; margin: 10px 0;
+            background: rgba(0,0,0,0.06); border: 1px solid var(--gold-low);
+            font-size: 1.2rem; cursor: pointer; text-align: left;
+            font-family: inherit;
+        }
+
+        .option-btn:hover { background: var(--gold-low); color: white; }
+
+        #overlay-msg {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9); z-index: 1000;
+            display: flex; flex-direction: column; justify-content: center;
+            align-items: center; color: var(--gold-bright); cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div id="stage-bg"></div>
+    <img id="wukong-sprite" src="wukong.png">
+    
+    <div id="lamp-container">
+        <div style="letter-spacing:2px;">道心值: <span id="hp-val">100</span></div>
+    </div>
+
+    <div id="dialog-panel">
+        <div id="speaker-name" style="font-weight:bold; color:#700; margin-bottom:10px; font-size:1.4rem;"></div>
+        <div id="question-text" style="font-size:1.2rem;"></div>
+        <div id="options-container"></div>
+    </div>
+
+    <div id="overlay-msg">
+        <div style="font-size:4rem; text-shadow: 0 0 20px var(--gold-low);">黑神话：导游执证修行</div>
+        <div style="font-size:1.4rem; margin-top:20px; opacity:0.8;">- 点击屏幕 开启业障考核 -</div>
+    </div>
+</div>
+
+<script>
+    // 关键：所有图片后缀已统一为 .png
+    const GAME_ASSETS = {
+        WUKONG: "wukong.png",
+        BG_STAGE_1: "bg_bus.png",
+        BG_STAGE_2: "bg_hotel.png",
+        BG_STAGE_3: "bg_ferry.png"
+    };
+
+    const QUIZ_DATA = [
+        {
+            stage: 1,
+            bg: GAME_ASSETS.BG_STAGE_1,
+            speaker: "怨气牛魔",
+            question: "这大巴怎么还不走！航班延误是你们的事，现在就给俺退款赔偿，否则俺这混铁棍可不认人！",
+            options: [
+                { text: "法术·避风诀：告知延误属不可抗力，协助退改但不予赔偿。", correct: true },
+                { text: "法术·散财咒：自掏腰包，全额赔偿。", correct: false }
+            ]
+        },
+        {
+            stage: 2,
+            bg: GAME_ASSETS.BG_STAGE_2,
+            speaker: "百目超售怪",
+            question: "嘿嘿，客满！即便你有预定，现在也没房了。去别处睡大街吧！",
+            options: [
+                { text: "火眼金睛：要求酒店开证明，寻找替代方案并补偿。", correct: true },
+                { text: "法天象地：强行把已经入住的人轰走。", correct: false }
+            ]
+        },
+        {
+            stage: 3,
+            bg: GAME_ASSETS.BG_STAGE_3,
+            speaker: "贪婪蛛后",
+            question: "玩够了，俺要离团！之前交的车费和导游费，你得通通吐出来还给俺！",
+            options: [
+                { text: "法术·定心咒：告知已产生费用不可退，仅退还未产生费用部分。", correct: true },
+                { text: "法术·傀儡术：强行扣留游客，不准离团。", correct: false }
+            ]
+        }
+    ];
+
+    let currentLevel = 0;
+    let daoXin = 100;
+
+    const overlay = document.getElementById('overlay-msg');
+    const dialog = document.getElementById('dialog-panel');
+    const stageBg = document.getElementById('stage-bg');
+    const wukong = document.getElementById('wukong-sprite');
+
+    overlay.onclick = () => {
+        overlay.style.display = 'none';
+        wukong.style.display = 'block';
+        loadLevel(currentLevel);
+    };
+
+    function loadLevel(index) {
+        const data = QUIZ_DATA[index];
+        if (!data) {
+            alert("功德圆满！你已成为金牌导游，从此西行路上一片坦途。");
+            location.reload();
+            return;
+        }
+
+        // 切换背景图
+        stageBg.style.backgroundImage = `url('${data.bg}')`;
+        dialog.style.display = 'block';
+        document.getElementById('speaker-name').innerText = data.speaker;
+        document.getElementById('question-text').innerText = data.question;
+
+        const container = document.getElementById('options-container');
+        container.innerHTML = '';
+        data.options.forEach(opt => {
+            const btn = document.createElement('button');
+            btn.className = 'option-btn';
+            btn.innerText = opt.text;
+            btn.onclick = () => {
+                if (opt.correct) {
+                    alert("【劫难消解】");
+                    currentLevel++;
+                    loadLevel(currentLevel);
+                } else {
+                    daoXin -= 20;
+                    document.getElementById('hp-val').innerText = daoXin;
+                    alert("【道心受损】");
+                    if (daoXin <= 0) {
+                        alert("心魔难除，修行失败。");
+                        location.reload();
+                    }
+                }
+            };
+            container.appendChild(btn);
+        });
+    }
+</script>
+</body>
+</html>
